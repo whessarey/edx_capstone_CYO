@@ -1,0 +1,744 @@
+---
+title: "Sales of summer clothes e-commerce Wish"
+author: "Wahidullah Hessarey"
+date: "05 11 2020"
+mainfont: Arial
+output:
+  pdf_document: 
+    toc: true
+    toc_depth: 3
+    latex_engine: xelatex
+---
+\newpage
+# 1) Introduction & purpose
+## 1.1 Purpose and model evaluation
+
+The purpose of this paper is to train machine learning (ML) algorithms in order to predict units sold of already existing products for existing merchants on the E-commerce platform called **Wish**. The target of the ML prediction model based on real data set of the month of August, 2020 is to predict **units sold** minimizing the Root Mean Square Error (RMSE) of model output $\hat{Y}$ vs. true units sold $Y$ .\
+Since the data set consists of one single month with no other time related information, time series analysis is not subject to the ML.\ 
+$$ RMSE = \sqrt{\frac{1}{N} *\sum_{n=1}^N (Y_{n} - \hat{Y}_{n})^2}, $$ with n = number of observations or rows.
+
+## 1.2 Data set description
+
+This data set contains product ratings and sales performance which comes from the platform 'Wish.com'. Basically, the products listed in the data set are those that would appear if you type "summer" in the search field of the platform.
+Following columns are found in the data set and described (see https:\//www.kaggle.com/jmmvutu/summer-products-and-sales-in-ecommerce-wish):\
+
++ title: Title for localized for European countries. May be the same as title_orig if the seller did not offer a translation.
++ title_orig: Original English title of the product.
++ price: price you would pay to get the product.
++ retail_price: reference price for similar articles on the market, or in other stores. Used by the seller to indicate a regular value or the price before discount.
++ currency_buyer: currency of the prices.
++ units_sold: Number of units sold.
++ uses_ad_boosts: Whether the seller paid to boost his product within the platform (highlighting, better placement).
++ rating: Mean product rating.
++ rating_count: Total number of ratings of the product.
++ rating_five_count, rating_four_count, rating_three_count, rating_two_count, rating_one_count: Number of 5, 4, 3, 2, and 1-star ratings.
++ badges_count: Number of badges the product or the seller have.
++ badge_local_product: A badge that denotes the product is a local product. Conditions may vary (being produced locally). Some people may prefer buying local products. 1 means product has the badge.
++ badge_product_quality: Badge awarded when many buyers consistently gave good evaluations. 1 means product has the badge.
++ badge_fast_shipping: Badge awarded when this product's order is consistently shipped rapidly.
++ tags: tags set by the seller.
++ product_color: Product's main color.
++ product_variation_size_id: One of the available size variation for this product.
++ product_variation_inventory: Inventory the seller has. Max allowed quantity is 50.
++ shipping_option_name :Name of shipping option.
++ shipping_option_price: shipping price.
++ shipping_is_express: whether the shipping is express or not. 1 for True.
++ countries_shipped_to: Number of countries this product is shipped to. Sellers may choose to limit where they ship a product to.
++ inventory_total: Total inventory for all the product's variations (size/color variations for instance).
++ has_urgency_banner: whether there was an urgency banner with an urgency.
++ urgency_text: A text banner that appear over some products in the search results.
++ origin_country: Country in which of merchant lives.
++ merchant_title: Merchant's displayed name (show in the UI as the seller's shop name).
++ merchant_name: Merchant's canonical name. A name not shown publicly. Used by the website under the hood as a canonical name.
++ merchant_info_subtitle: The subtitle text as shown on a seller's info section to the user. (raw, not preprocessed). The website shows this to the user to give an overview of the seller's stats to the user. Mostly consists of % positive_feedbacks (rating_count reviews) written in French.
++ merchant_rating_count: Number of ratings of this seller.
++ merchant_rating: merchant's rating.
++ merchant_id: merchant unique id.
++ merchant_has_profile_picture: Convenience Boolean that says whether there is a `merchant_profile_picture` URL link.
++ merchant_profile_picture: Custom profile picture of the seller (if the seller has one). Empty otherwise.
++ product_URL: URL to the product page.
++ product_picture: Picture of the product.
++ product_id: product identifier.
++ theme: the search term used in the search bar of the website to get these search results.
++ crawl_month: (meta: for info only).
+
+```{r, include=FALSE}
+options(width = 90)
+```
+\newpage
+# 2) Data explanatory analysis
+## 2.1 Data wrangling
+```{r Libraries, include=FALSE}
+# Installing required libraries
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(stringr)) install.packages("stringr", repos = "http://cran.us.r-project.org")
+if(!require(ggpubr)) install.packages("ggpubr", repos = "http://cran.us.r-project.org")
+if(!require(corrplot)) install.packages("corrplot", repos = "http://cran.us.r-project.org")
+if(!require(matrixStats)) install.packages("matrixStats", repos = "http://cran.us.r-project.org")
+if(!require(randomForest)) install.packages("randomForest", repos = "http://cran.us.r-project.org")
+if(!require(wordcloud)) install.packages("wordcloud", repos = "http://cran.us.r-project.org")
+if(!require(tm)) install.packages("tm", repos = "http://cran.us.r-project.org")
+if(!require(RColorBrewer)) install.packages("RColorBrewer", repos = "http://cran.us.r-project.org")
+if(!require(caretEnsemble)) install.packages("caretEnsemble", repos = "http://cran.us.r-project.org")
+if(!require(factoextra)) install.packages("factoextra", repos = "http://cran.us.r-project.org")
+```
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+#Loading required R libraries:
+library(tidyverse)
+library(caret)
+library(stringr)
+library(ggpubr)
+library(corrplot)
+library(matrixStats)
+library(randomForest)
+library(wordcloud)
+library(tm)
+library(RColorBrewer)
+library(caretEnsemble)
+library(factoextra)
+```
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+#Loading and saving of the data set "summer-products-with-rating-and-performance-2020-08.csv" from my github account:
+raw_data<-read_csv("https://raw.githubusercontent.com/whessarey/edx_capstone_CYO/master/summer-products-with-rating-and-performance_2020-08.csv")
+save(raw_data, file="summer-products-with-rating-and-performance_2020-08.Rdata")
+load("summer-products-with-rating-and-performance_2020-08.Rdata")
+```
+```{r, message=FALSE, warning=FALSE}
+class(raw_data)
+dim(raw_data)
+glimpse(raw_data)
+```
+
+
+
+One can observe that the raw data is mainly in tidy format but contains some NA values:\
+
+
+```{r, echo=FALSE, message=FALSE,  warning=FALSE}
+N_A<-sort(sapply(raw_data, function(x) sum(is.na(x))), decreasing=TRUE)
+N_A[N_A>0]
+```
+
+
+Features as *merchant_profile_picture* and *has_urgency_banner* have the most NA values. *Merchant_profile_picture* corresponds to *merchant_has_profile_picture* and thus, the whole column can be removed. *Urgency_text* and *urgency_banner* correspond to each other, thus the column *urgency_text* can be removed.\
+The features *rating_count_five* until *rating_count_one* contain NA values. They are replaced with '0', assuming these merchants have no ratings in the corresponding categories yet.\
+
+**New features**:\
+The feature *merchant_pos_feedback_rate* is derived from *merchant_info_subtitle* and calculated. New features as *Tags_number*, *shipping_price_percentage*, *discount_percent*, and *merchant_has_feedback_rate* (binary) are calculated.\
+
+*Shipping_price_percentage* ($\frac{price_{shipping option} }{price_{product}}$) and *discount_percent* ($\frac{price_{retail} - price_{product} }{price_{retail}}$) could be more informative than their absolute values.\
+Features as *merchant_info_subtitle* and *tags* are removed afterwards. *Product_variation_size_id* is unified and simplified.
+
+
+```{r, echo=FALSE, message=FALSE,  warning=FALSE, tidy.opts=list(width.cutoff=50), tidy=TRUE}
+processed_data<- raw_data %>% mutate(merchant_has_profile_picture = ifelse(is.na(merchant_has_profile_picture),0,merchant_has_profile_picture),
+                                     has_urgency_banner= ifelse(is.na(has_urgency_banner),0,has_urgency_banner),
+                                     rating=ifelse(rating_count==0, 0, rating),
+                                     rating_five_count=ifelse(is.na(rating_five_count), 0, rating_five_count),
+                                     rating_four_count=ifelse(is.na(rating_four_count), 0, rating_four_count),
+                                     rating_three_count=ifelse(is.na(rating_three_count), 0, rating_three_count),
+                                     rating_two_count=ifelse(is.na(rating_two_count), 0, rating_two_count),
+                                     rating_one_count=ifelse(is.na(rating_one_count), 0, rating_one_count),
+                                     merchant_rating= round(merchant_rating, digits = 1),
+                                     rating=round(rating, digits = 1),
+                                     merchant_pos_feedback_rate=as.numeric(sub("%.*","",merchant_info_subtitle)),
+                                     merchant_has_feedback_rate=ifelse(is.na(merchant_pos_feedback_rate), 0, 1),
+                                     tags_number=as.numeric(str_count(tags, ",")),
+                                     product_variation_size_id=str_to_upper(str_trim(str_replace(product_variation_size_id, ".*-|.*/|\\(.*|\\s.*|\\..*|\\..|WOMEN", ""), side = "both")),
+                                     product_variation_size_id=str_replace(product_variation_size_id,"2XL|3XL|4XL|5XL|6XL", "XL"),
+                                     product_variation_size_id= ifelse(str_detect(product_variation_size_id, "\\bS\\b|\\bM\\b|\\bL\\b|\\bXL\\b|\\bXS\\b|\\bXXS\\b|\\bXXXS\\b|\\bXXL\\b|\\bXXXL\\b|\\bXXXXL\\b")==TRUE, product_variation_size_id, "others" ),
+                                     product_variation_size_id= ifelse(product_variation_size_id=="M(CHILD)" | is.na(product_variation_size_id), "others", product_variation_size_id),
+                                     product_color= str_to_sentence(product_color),
+                                     discount_percent=as.numeric(ifelse(retail_price>price, round((retail_price - price)/retail_price, digits = 2), 0)),
+                                     
+                                     shipping_price_percentage= as.numeric(round(shipping_option_price/price, digits = 2))) %>%
+  select(-merchant_info_subtitle, -tags, -merchant_profile_picture, -urgency_text)
+
+n_month<-n_distinct(processed_data$crawl_month)
+n_buyer<-n_distinct(processed_data$currency_buyer)
+n_theme<-n_distinct(processed_data$theme)
+processed_data<-processed_data %>% select(-c(crawl_month, currency_buyer, theme, product_picture, product_url, title, title_orig))
+```
+
+
+Further data preprocessing is conducted as follows:\
+Features with absolutely unique values as *crawl_month*, *currency_buyer*, and *theme* do not impact *units_sold* and are consequently removed. *Product URL* is not a valuable feature for a model since it does not impact *units_sold* and is consequently removed.\
+The specific case of whether a merchant has *title* in a foreign language besides product's *orig_title* is not being analyzed assuming that it would not have much impact on *units_sold*.\
+Since all products have *product_picture* and there is no other detailed information about the pictures, this feature will be removed, too.
+
+
+```{r, message=FALSE,  warning=FALSE}
+dim(processed_data)
+summary(processed_data)
+```
+
+
+Still four features have NA values with *product_color* leading. These NAs are not removed immediately before analyzing the impact of the corresponding features or columns on *units_sold*.\
+Data contains `r n_distinct(processed_data$product_id)` unique products and `r n_distinct(processed_data$merchant_id)` unique merchants.
+
+
+**Creating train set for model training purposes and validation set for calculating final RMSE value**:\
+
+
+```{r, message=FALSE,  warning=FALSE}
+set.seed(1, sample.kind = "Rounding")
+test_index<- createDataPartition(processed_data$units_sold, times = 1, p=.2, list = F)
+train_set<-processed_data[-test_index,]
+validation<-processed_data[test_index,]
+rm(test_index)
+```
+
+\newpage
+## 2.2 Data exploration
+### 2.2.1 Distribution of units_sold
+
+```{r, echo=FALSE, message=FALSE,  warning=FALSE}
+summary(train_set$units_sold)
+rd_hist<-train_set %>% ggplot(aes(units_sold)) + geom_histogram(bins = 30) + ggtitle("Histogram of units sold") + scale_x_log10() + xlab("units_sold [log]")
+rd_boxplot<-train_set %>% ggplot(aes(x="", y=units_sold)) + geom_boxplot() + geom_jitter() + ggtitle("Boxplot of units sold") + coord_flip()
+ggarrange(rd_boxplot, rd_hist, labels = c("A", "B"), ncol = 1, nrow = 2)
+```
+
+
+**A and B**: Regarding the distribution of the feature 'units_sold' one observes that the its median is `r median(train_set$units_sold)` units with a mean of `r round(mean(train_set$units_sold), 0)` units (showing slight skewness of data to the right). Most common values are 100 units and 1,000 units. There are very less merchants having *units_sold* consisting of 100,000 units and no merchant with zero units.\
+*units_sold* over 12,000 units could be outliers but without any further information (which is not existent in the data) they should not be removed. It is notable that there are "white spaces", i.e. no values for example between 100 and 1,000.
+
+
+### 2.2.2 Price sensitivity analysis
+
+
+```{r echo=FALSE, message=FALSE,  warning=FALSE}
+summary(train_set$price)
+disc_plot<-train_set %>% group_by(discount_percent) %>% ggplot(aes(x=discount_percent, y=units_sold)) + geom_point() + geom_smooth() +
+  ggtitle("Units_sold vs. discount percentage") + xlab("Discount percentage") + scale_x_continuous(labels = scales::percent_format())
+price_plot1<-train_set %>% ggplot(aes(x=price, y=units_sold)) + geom_point() + geom_smooth() + ggtitle("units_sold vs. price")
+price_plot2<-train_set %>% ggplot(aes(x=retail_price, y=units_sold)) + geom_point() + geom_smooth() + ggtitle("units_sold vs. retail price")
+
+ggarrange(disc_plot, price_plot1, price_plot2, labels = c("A", "B", "C"), ncol = 1, nrow = 4)
+```
+
+
+The median of price is 8.00 EUR and its mean is 8.3 EUR, thus 50% of products having prices below the mean.\
+**A until C**: According to the plots *price* and *retail_price* seem to have low negative impact on *units_sold*. The quotient of these two features *discount_percent* very slightly impacts *units_sold*. Thus, customers are mainly price insensitive.
+
+
+```{r echo=FALSE, message=FALSE,  warning=FALSE, out.width= "70%", out.height="35%", fig.align = "center"}
+train_set %>% mutate(price_category=cut(price, breaks = seq(0, 50, 10))) %>% ggplot(aes(x=price_category, y=units_sold)) + geom_point() + geom_smooth() + ggtitle("units_sold vs. price categories")
+```
+
+
+The last plot clearly shows the negative impact of the feature *price* or price categories on the outcome *units_sold*.
+
+
+### 2.2.3 Product attribute analysis
+
+
+```{r, echo=FALSE, message=FALSE,  warning=FALSE}
+prod_rating_plot1<-train_set %>% ggplot(aes(x=as.factor(rating), y=units_sold)) + geom_bar(stat = "identity") + ggtitle("Units sold") +
+  theme(axis.text.x = element_text(angle=90, hjust=1))
+prod_rating_plot2<-train_set %>% group_by(rating) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=as.factor(rating), y= avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() + ggtitle("Avg. units sold") +
+  theme(axis.text.x = element_text(angle=90, hjust=1))
+ggarrange(prod_rating_plot1, prod_rating_plot2, labels = c("A", "B"),ncol = 1, nrow = 2)
+```
+
+
+**A & B**: Plots indicate that product *rating* has a strong impact on *units_sold*.
+
+
+```{r, echo=FALSE, message=FALSE}
+prod_rating_count<-train_set %>%ggplot(aes(x=rating_count, y=units_sold)) + geom_point() + geom_smooth() + ggtitle("Units sold vs. rating count")
+prod_rating_count_p1<-train_set %>% ggplot(aes(x=rating_one_count, y=units_sold)) + geom_point() + geom_smooth() + ggtitle("Units sold vs. one rating count")
+prod_rating_count_p2<-train_set %>% ggplot(aes(x=rating_two_count, y=units_sold)) + geom_point() + geom_smooth()  + ggtitle("Units sold vs. rating two count")
+prod_rating_count_p3<-train_set %>% ggplot(aes(x=rating_three_count, y=units_sold)) + geom_point() + geom_smooth() + ggtitle("Units sold vs. rating three count")
+prod_rating_count_p4<-train_set %>% ggplot(aes(x=rating_four_count, y=units_sold)) + geom_point() + geom_smooth() + ggtitle("Units sold vs. rating four count")
+prod_rating_count_p5<-train_set %>% ggplot(aes(x=rating_five_count, y=units_sold)) + geom_point() + geom_smooth() + ggtitle("Units sold vs. rating five count")
+
+ggarrange(prod_rating_count, prod_rating_count_p1, prod_rating_count_p2, prod_rating_count_p3, prod_rating_count_p4,prod_rating_count_p5,
+          labels = c("C", "D", "E", "F", "G", "H"),ncol = 2, nrow = 3)
+```
+
+
+**C**: *Rating_count* has an impact on *units_sold*, too. This makes sense because higher *units_sold* high probably leads to more and more product rating counts. The direction of action is strictly speaking one-way: higher *units_sold* means higher rating counts, thus **rating count can not** be considered in the model. Furthermore, *rating_count* is a mixed combination of positive and negative ( 1 and 2 star) ratings making it not suitable for modeling.\
+**D until H**: All 1, 2, 3, 4, and 5 star ratings are positively correlated with *units_sold*. However, the slope of the smooth function for 1 and 2 star ratings gets smaller the higher the rating counts.\
+
+
+
+```{r, echo=FALSE, message=FALSE,  warning=FALSE}
+prod_urgban_plot<-train_set %>% group_by(has_urgency_banner) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=as.factor(has_urgency_banner), y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() +
+  ggtitle("Avg. units_sold") + xlab("Merchant uses urgency banner") +  ylab("Avg. units_sold")
+prod_adboost_plot<-train_set %>% group_by(uses_ad_boosts) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=as.factor(uses_ad_boosts), y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() +
+  ggtitle("Avg. units_sold") + xlab("Merchant uses adboosts")  + ylab("Avg. units sold")
+prod_tags<-train_set %>% group_by(tags_number) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=tags_number, y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() +
+  ggtitle("Avg. units_sold")
+
+ggarrange(prod_urgban_plot, prod_adboost_plot, prod_tags, labels = c("I", "J", "K"), ncol = 2, nrow = 2)
+```
+
+
+**I until K**: Features as *merchant_use_adboosts*, *tags_number* or *urgency_banner* do not impact *units_sold.* Hypothetically, merchants having low level of *units_sold* use adboosts expecting higher volumes of revenue.
+
+
+```{r, echo=FALSE, message=FALSE,  warning=FALSE,  out.width= "60%", out.height="45%"}
+df_size<-train_set %>% group_by(product_variation_size_id) %>% summarize(product_variation_size_number = n())
+wordcloud(words = df_size$product_variation_size_id, freq =df_size$product_variation_size_number, 
+    min.freq = 10, max.words = 10, random.order = FALSE, random.color = FALSE, 
+    rot.per = 0.35, scale = c(5, 0.2), font = 4, colors = brewer.pal(8, "Dark2"), 
+    main = "Most product variation sizes")
+df_inventory<-train_set %>% group_by(product_variation_inventory) %>% summarize(product_variation_inventory_number = n())
+wordcloud(words = df_inventory$product_variation_inventory, freq =df_inventory$product_variation_inventory_number, 
+    min.freq = 10, max.words = 10, random.order = FALSE, random.color = FALSE, 
+    rot.per = 0.35, scale = c(5, 0.2), font = 4, colors = brewer.pal(8, "Dark2"), 
+    main = "Most product variation sizes")
+```
+
+
+'S', 'XS' , and 'M' are the most prevalent sizes. The most prevalent product variation inventory is by far '50' units.
+
+```{r, echo=FALSE, message=FALSE,  warning=FALSE}
+prod_varsize_plot<-train_set %>% group_by(product_variation_size_id) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=product_variation_size_id, y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() +
+  ggtitle("Avg. units_sold") + theme(axis.text.x = element_text(angle=45, hjust=1))
+prod_varinvent_plot<-train_set %>% group_by(product_variation_inventory) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=product_variation_inventory, y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() +
+  ggtitle("Avg. units_sold") + theme(axis.text.x = element_text(angle=45, hjust=1))
+ggarrange(prod_varsize_plot, prod_varinvent_plot,labels = c("L", "M"), ncol = 1, nrow = 2)
+```
+
+
+**L**: *Product_variation_size* impacts *units_sold* as the mean of the different variations differ.\
+**M**: However, *product_variation_inventory* very poorly affects *units_sold*.
+
+
+```{r, echo=FALSE, message=FALSE,  warning=FALSE}
+prod_col_plot1<-train_set %>% group_by(product_color) %>% summarize(n=units_sold) %>% mutate(product_color=reorder(product_color, -n)) %>%
+  ggplot(aes(x=product_color, y= n)) + geom_bar(stat="identity") + ggtitle("Units sold vs. product color") + theme(axis.text.x = element_text(angle=90, hjust=1))
+
+prod_col_plot2<-train_set %>% group_by(product_color) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% mutate(product_color=reorder(product_color, avg))%>%
+ggplot(aes(x=product_color, y= avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() +theme(axis.text.x = element_text(angle=90, hjust=1))+
+  ggtitle("Avg. units sold")
+
+ggarrange(prod_col_plot1, prod_col_plot2, labels = c("N", "O"),ncol = 1, nrow = 2)
+```
+
+
+**N**: *Product_colors* as black, white, grey, blue , or green are very popular and demanded.\
+**O**: Plot shows that the feature *product_color* do not necessarily impact *units_sold*.
+
+
+```{r, echo=FALSE, message=FALSE,  warning=FALSE}
+badge1<-train_set %>% group_by(badges_count) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=as.factor(badges_count), y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() + ggtitle("Avg. units_sold") + xlab("Badges count")
+badge2<-train_set %>% group_by(badge_product_quality) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=as.factor(badge_product_quality), y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() +  ggtitle("Avg. units_sold") + xlab("Badges product quality")
+badge3<-train_set %>% group_by(badge_local_product) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=as.factor(badge_local_product), y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() +  ggtitle("Avg. units_sold") + xlab("Badges local product") 
+badge4<-train_set %>% group_by(badge_fast_shipping) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=as.factor(badge_fast_shipping), y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() +  ggtitle("Avg. units_sold") + xlab("Badges fast shipping") 
+
+ggarrange(badge1, badge2, badge3, badge4, labels = c( "P", "Q","R", "S"), ncol = 2, nrow = 2)
+```
+
+
+**P**: A higher number of *badges* does not necessarily lead to higher *units_sold*.\
+**Q**: The badge *product_quality* seems to impact *units_sold*.\
+**R & S**: Badges as *local_product* or *fast_shipping* do not necessarily lead to higher *units_sold*.\
+
+
+### 2.2.4 Product logistics
+
+
+```{r, echo=FALSE, message=FALSE,  warning=FALSE}
+express_plot<-train_set %>% group_by(shipping_is_express) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=as.factor(shipping_is_express), y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() +geom_errorbar() +  ggtitle("Avg. units_sold") + xlab("Shipping is express")
+ship_price_plot<-train_set %>% group_by(shipping_price_percentage, shipping_is_express) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=shipping_price_percentage, y=avg, ymin=avg-2*se, ymax=avg+2*se, color=  as.factor(shipping_is_express))) + geom_point() + geom_errorbar() + ggtitle("Avg. units_sold") + xlab("Shipping price percentage") +  theme(legend.position="top")
+
+ggarrange(express_plot, ship_price_plot, labels = c("A", "B"), ncol = 2, nrow = 1)
+```
+
+
+**A**: Products marked as '*shipping_is_express*' do not lead to higher *units_sold*.\
+**B**: *Shipping_price_percentage* has a slight negative impact on *units_sold*.\
+
+```{r, echo=FALSE, message=FALSE,  warning=FALSE}
+orig_plot1<-train_set %>% ggplot(aes(x= origin_country, y= units_sold)) + geom_bar(stat = "identity") + ggtitle("Units_sold") + xlab("Origin countries")
+orig_plot2<-train_set %>% group_by(origin_country) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>%
+  ggplot(aes(x=origin_country, y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() +  ggtitle("Avg. units_sold") + xlab("Origin countries")
+ship_to_plot<-train_set %>% group_by(countries_shipped_to) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>%
+  ggplot(aes(x=countries_shipped_to, y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() +  ggtitle("Avg. units_sold") + xlab("Countries shipped to")
+
+ggarrange(orig_plot1, orig_plot2, ship_to_plot, labels = c("C", "D", "E"), ncol = 1, nrow = 3)
+```
+
+
+**C until E**: *Units_sold* do not differ regarding geographical features as *origin_country* or *countries_shipped_to.*
+
+
+### 2.2.5 Merchant attribute analysis
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+merch_plot1<-train_set %>% group_by(merchant_rating) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=as.factor(merchant_rating), y= avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() +  ggtitle("Avg. units sold") + xlab("Merchant rating") + theme(axis.text.x = element_text(angle=90, hjust=1))
+merch_plot2<-train_set %>% group_by(merchant_pos_feedback_rate) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>%
+  ggplot(aes(x=merchant_pos_feedback_rate, y=avg, ymin=avg-2*se, ymax=avg+2*se)) +  geom_point() + geom_errorbar() +  ggtitle("Avg. units sold") + xlab("Merchant pos. feedback rate")
+merch_plot3<-train_set %>% group_by(merchant_rating_count) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>%
+  ggplot(aes(x=merchant_rating_count,  y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() + geom_smooth() +  scale_x_log10() + scale_y_log10() + ggtitle("Avg. units sold vs. rating count")
+merch_plot4<-train_set %>% ggplot(aes(y=merchant_pos_feedback_rate, x=merchant_rating)) + geom_point() + geom_smooth() +  ggtitle("Merchant feedback and rating")
+
+ggarrange(merch_plot1, merch_plot2, merch_plot3, merch_plot4, labels = c("A", "B", "C", "D"), ncol = 2, nrow = 2)
+```
+
+
+**A until C**: The diagrams above indicate positive correlations between average *units_sold* and the features *merchant_rating*, *merchant_rating_count*, and *merchant_pos_feedback_rate.*\
+*Merchant_rating_count* is not considered in the model for the same reasons as product *rating_count.*\
+**D**: The features *merchant_rating* and *merchant_pos_feedback_rate* are highly correlated, thus these two features should be summarized as one feature for the sake of dimension reduction. The new created feature *merchant_pos_feedback_rate* will be removed.\
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+merch_plot5<-train_set %>% group_by(merchant_has_profile_picture) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=as.factor(merchant_has_profile_picture), y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() +  ggtitle("Avg. units sold") + xlab("Merchant has profile picture") 
+merch_plot6<-train_set %>% group_by(merchant_has_feedback_rate) %>% summarize(avg=mean(units_sold), se=sd(units_sold)/sqrt(n())) %>% 
+  ggplot(aes(x=as.factor(merchant_has_feedback_rate), y=avg, ymin=avg-2*se, ymax=avg+2*se)) + geom_point() + geom_errorbar() +  ggtitle("Avg. units sold") + xlab("Merchant has feedback rate")
+ggarrange(merch_plot5, merch_plot6, labels = c("E", "F"), ncol = 2, nrow = 1)
+```
+
+
+**E**: According to the error bar diagram *merchant_has_profile_picture* has a positive impact on average *units_sold*.\
+**F**: Whether a merchant has a feedback rate in the merchant info subtitle or not, it does not impact *units_sold*.\
+
+Finally, train set and validation set are adjusted according to the insights from data exploratory analysis. For example, *Product_variation_size_id* is 'one-hot-encoded'.
+
+
+```{r, message=FALSE,  warning=FALSE, echo=FALSE}
+S<- ifelse(train_set$product_variation_size_id=="S", 1, 0)
+L <- ifelse(train_set$product_variation_size_id=="L", 1, 0)                           
+M <- ifelse(train_set$product_variation_size_id=="M", 1, 0)                          
+others<- ifelse(train_set$product_variation_size_id=="others", 1, 0)                                               
+XL <- ifelse(train_set$product_variation_size_id=="XL", 1, 0)                          
+XS  <- ifelse(train_set$product_variation_size_id=="XS", 1, 0)                        
+XXL<- ifelse(train_set$product_variation_size_id=="XXL", 1, 0)                          
+XXS <- ifelse(train_set$product_variation_size_id=="XXS", 1, 0)                        
+XXXL<- ifelse(train_set$product_variation_size_id=="XXXL", 1, 0)                          
+XXXS<- ifelse(train_set$product_variation_size_id=="XXXS", 1, 0)                          
+XXXXL<- ifelse(train_set$product_variation_size_id=="XXXXL", 1, 0)
+
+train_set<-train_set %>% select(-c(rating_count, merchant_rating_count)) %>% add_column(S, L, M, others, XL, XS, XXL, XXS, XXXL, XXXS, XXXXL)
+
+S<- ifelse(validation$product_variation_size_id=="S", 1, 0)
+L <- ifelse(validation$product_variation_size_id=="L", 1, 0)                           
+M <- ifelse(validation$product_variation_size_id=="M", 1, 0)                          
+others<- ifelse(validation$product_variation_size_id=="others", 1, 0)                                               
+XL <- ifelse(validation$product_variation_size_id=="XL", 1, 0)                          
+XS  <- ifelse(validation$product_variation_size_id=="XS", 1, 0)                        
+XXL<- ifelse(validation$product_variation_size_id=="XXL", 1, 0)                          
+XXS <- ifelse(validation$product_variation_size_id=="XXS", 1, 0)                        
+XXXL<- ifelse(validation$product_variation_size_id=="XXXL", 1, 0)                          
+XXXS<- ifelse(validation$product_variation_size_id=="XXXS", 1, 0)                          
+XXXXL<- ifelse(validation$product_variation_size_id=="XXXXL", 1, 0)
+validation<-validation %>% select(-c(rating_count, merchant_rating_count))%>% add_column(S, L, M, others, XL, XS, XXL, XXS, XXXL, XXXS, XXXXL)
+```
+\newpage
+## 2.3 Data preprocessing
+### 2.3.1 Correlation heat map
+
+A correlation heat map is an adequate method for summarizing correlations between all numerical variables.
+This analysis is used to identify irrelevant features as well as highly correlated features.\
+
+Train set dimension:
+```{r, message=FALSE,  warning=FALSE, echo=FALSE,  fig.align = "center"}
+train_mat<-select_if(train_set, is.numeric) %>%as.matrix()
+dim(train_mat)
+Mx <- cor(train_mat, use = "pairwise.complete.obs")
+corrplot(Mx, method = "color", tl.cex = 0.7)
+rm(train_mat)
+```
+
+
+Following statements can be derived from the plot above:\
+
+* Features positively correlated to *units_sold*:
+  + rating
+  + rating_five_count, rating_four_count, rating_three_count, rating_two_count (decreasing slope beginning with approximately 1500 ratings!), rating_one_count (decreasing slope beginning with approximately 2000 ratings!)
+  + badges_count, badge_product_quality
+  + product_variation_inventory
+  + merchant_rating
+  + merchant_has_profile_picture
+  + merchant_positive_feedback\
+  
+* Features negatively correlated to *units_sold*:
+  + shipping_price_percentage
+  + shipping_option_price
+  + merchant_use_adboosts
+  + price\
+  
+* Features having very low or no correlation with *units_sold*:
+  + retail_price
+  + badge_local_product, badge_fast_shipping
+  + shipping_is_express
+  + countries_shipped_to
+  + inventory_total
+  + urgency_banner
+  + tags_number
+  + discount_percent
+  + merchant_with_feedback vs. no feedback
+  + all product variation sizes\
+    
+* Correlated features are:
+  + rating_count, rating_five_count until rating_one_count
+  + merchant_rating_count and merchant_rating with rating_count, rating_five_count until rating_one_count 
+  + merchant_rating and product_rating
+  + merchant_rating and merchant_positive_feedback\
+
+Consequently, features or columns having no correlation with *units_sold* are removed from the data set.
+
+```{r,  message=FALSE,  warning=FALSE, tidy.opts=list(width.cutoff=50), tidy=TRUE}
+train_set<-train_set %>% select(-c(retail_price, badge_local_product, badge_fast_shipping, shipping_is_express, countries_shipped_to, inventory_total, has_urgency_banner, tags_number, discount_percent, merchant_has_feedback_rate, merchant_pos_feedback_rate, product_variation_size_id, S, L, M, others, XL, XS, XXL, XXS, XXXL, XXXS, XXXXL))
+
+validation<-validation %>% select(-c(retail_price, badge_local_product, badge_fast_shipping, shipping_is_express, countries_shipped_to, inventory_total, has_urgency_banner, tags_number, discount_percent, merchant_has_feedback_rate, merchant_pos_feedback_rate, product_variation_size_id, S, L, M, others, XL, XS, XXL, XXS, XXXL, XXXS, XXXXL))
+```
+
+```{r, message=FALSE,  warning=FALSE}
+top_6_merchant<-train_set %>% filter(units_sold>=100000)
+top_6_merchant
+```
+
+Illustratively, the table above shows the top six merchants. It could be observed that these merchants have high product and merchant ratings (>3.5), only three of them use ad boosts without any badges, they have proportionally high numbers of 5-star ratings, all operate from Canada, and offering product sizes S and M.
+
+
+### 2.3.2 Principle component analysis
+
+Principle component analysis (PCA) is a common method for dimension reduction regarding data sets with high number of features. The train data set has still `r NCOL(train_set)` features while it consists of `r NROW(train_set)` observations (rows). Thus, a dimension reduction would be reasonable.
+
+
+```{r, message=FALSE,  warning=FALSE}
+train_x<-select_if(train_set, is.numeric) %>% select(-units_sold) %>% as.matrix()
+train_y<-train_set$units_sold
+
+pca<-prcomp(train_x, center = T, scale. = T)
+summary(pca)
+```
+
+
+Only 8 PCs account for over 90% of the data set variation with PC1 accounting for the most variance. Thus, the following analysis is conducted on these PCs.\
+
+
+```{r, echo=FALSE, message=FALSE,  warning=FALSE, out.width = "50%" , out.height="30%"}
+fviz_eig(pca)
+fviz_pca_var(pca,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE)
+plot(pca$x[,1], pca$x[,2])
+plot(pca$x[,3], pca$x[,4])
+```
+
+
+The plots of the x-values of the PC's one until four do not show any obvious patterns.\
+As the PCA loadings show the features *rating_star_counts* have the most contribution to PC1 and the feature *price* has the most contribution to PC2 followed by *shipping_option_price.*\
+
+According to results of PCA train set and validation set are transformed.
+
+
+
+```{r, message=FALSE,  warning=FALSE}
+imp<-8
+train_x_imp<-pca$x[,1:imp]
+validation_x<-select_if(validation, is.numeric)  %>% select(-units_sold)%>% as.matrix()
+validation_y<-validation$units_sold
+validation_x_mean_0 <- sweep(validation_x, 2, colMeans(validation_x))
+validation_x_standardized <- sweep(validation_x_mean_0, 2, colSds(validation_x), FUN = "/")
+validation_x_pca<-validation_x_standardized %*% pca$rotation
+validation_x_imp <- validation_x_pca[,1:imp]
+rm(validation_x_mean_0, validation_x_standardized, validation_x_pca)
+```
+
+
+Now data has reasonable features and dimension complexity ready for modeling.
+
+\newpage
+
+# 3) Modeling and results
+## 3.1 Baseline model and prediction models
+
+Before models are trained and finally evaluated on validation set, the train set is divided in train_sub and test set in order to test and compare the different prediction algorithms and choose the final model.
+
+```{r, message=FALSE,  warning=FALSE}
+set.seed(1, sample.kind = "Rounding")
+test_index<- createDataPartition(train_y, times = 1, p=.1, list = F)
+train_x_imp_sub<-train_x_imp[-test_index,]
+test_x_imp<-train_x_imp[test_index,]
+train_y_sub<-train_y[-test_index]
+test_y<-train_y[test_index]
+rm(test_index)
+```
+
+
+
+If one is asked to give a 'guess' about the model output *units_sold*, a meaningful 'guess' would be the average of it which basically minimizes RMSE. Thus, a baseline model is built which is the average of ${Y}$  (train set) for comparison purposes regarding RMSE values of different ML algorithms.\
+Furthermore, following common models from caret package are used  in order to build first prediction models:
+
+  + Generalized Linear Model (logistic regression model) or *glm*
+  + k-Nearest Neighbors *knn*
+  + Random Forests *rf*\
+
+knn and rf-models are tuned in order to find the best model parameter as number of neighbors or number of variables randomly sampled as candidates at each split.\
+
+
+```{r message=FALSE, warning=FALSE,  out.width = "70%" , out.height="30%", fig.align = "center"}
+y_hat_baseline<-mean(train_y_sub)
+RMSE_baseline<-RMSE(test_y, y_hat_baseline)
+RMSE_baseline
+
+set.seed(100, sample.kind = "Rounding")
+fit_glm<-train(train_x_imp_sub, train_y_sub, method = "glm")
+fit_glm$finalModel
+y_hat_glm <- predict(fit_glm, test_x_imp)
+RMSE_glm<-RMSE(test_y, y_hat_glm)
+RMSE_glm
+
+set.seed(100, sample.kind = "Rounding")
+k<-seq(1,20,1)
+fit_knn<-train(train_x_imp_sub, train_y_sub, method = "knn", tuneGrid = data.frame(k=k))
+ggplot(fit_knn)
+fit_knn$finalModel
+y_hat_knn <- predict(fit_knn, test_x_imp)
+RMSE_knn<-RMSE(test_y, y_hat_knn)
+RMSE_knn
+
+set.seed(100, sample.kind = "Rounding")
+mtry<-seq(50, 550,50)
+fit_rf<-train(train_x_imp_sub, train_y_sub, method = "rf", tuneGrid=data.frame(mtry=mtry), nodesize=1)
+ggplot(fit_rf)
+fit_rf$finalModel
+y_hat_rf <- predict(fit_rf, test_x_imp)
+RMSE_rf<-RMSE(test_y, y_hat_rf)
+RMSE_rf
+```
+
+
+The baseline model has a RMSE of `r round(RMSE_baseline,0)`. Best performing algorithm is *Random Forest* which has a RMSE of `r round(RMSE_rf, 0)` with the best tune parameter `r fit_rf$bestTune`:\
+$$ \frac{RMSE(rf)}{RMSE(baseline)} = `r round(RMSE_rf/RMSE_baseline,2)` $$
+However, *rf* requires much more computing capacity and time than all other ML algorithms.\
+After a first attempt one could say *rf* seems to be a reasonable model predicting future *units_sold*. Before choosing a final model it would be interesting to analyze the distributions of all the three ML algorithms:
+
+
+```{r, echo=FALSE, message=FALSE,  warning=FALSE}
+test_y_plot<-as.data.frame(test_y) %>% ggplot(aes(x="", y=test_y)) + geom_boxplot() + geom_jitter() + ylim(0, 20000) + coord_flip()
+y_hat_glm_plot<-as.data.frame(y_hat_glm) %>% ggplot(aes(x="", y=y_hat_glm)) + geom_boxplot() + geom_jitter() + ylim(0, 20000) + coord_flip()
+y_hat_knn_plot<-as.data.frame(y_hat_knn) %>% ggplot(aes(x="", y=y_hat_knn)) + geom_boxplot() + geom_jitter() + ylim(0, 20000) + coord_flip()
+y_hat_rf_plot<-as.data.frame(y_hat_rf) %>% ggplot(aes(x="", y=y_hat_rf)) + geom_boxplot() + geom_jitter() + ylim(0, 20000) + coord_flip()
+
+ggarrange(test_y_plot, y_hat_glm_plot, y_hat_knn_plot, y_hat_rf_plot, ncol = 1, nrow = 4)
+```
+
+
+One can observe that in some intervals, e.g. 15,000 until 20,000 units *knn* makes better prediction than the other ML algorithms, thus combining these ML algorithms could probably lead to better predictions through ensembling.\
+
+## 3.2 Ensemble model
+
+In order to build an ensemble model the *caretEnsemble* package for making ensembles of caret models is being utilized.\
+caretEnsemble has three primary functions: *caretList*, *caretEnsemble* and *caretStack.*\
+*caretList* is used to build lists of caret models on the same training data, with the same re-sampling parameters. *caretEnsemble* and *caretStack* are used to create ensemble models from such lists of caret models. *caretEnsemble* uses a *glm* algorithm to create a simple linear blend of models and caretStack uses a caret model to combine the outputs from several component caret models. In this paper the *caretEnsemble* is being used.\
+
+Following 16 base models from caret package are used  in order to build an ensemble model:
+
+  + Generalized Linear Model (logistic regression model) or *glm*
+  + Support Vector Machines as *svmLinear*,  *svmRadial*, *svmRadialCost*, and *svmRadialSigma*
+  + Generalized Additive Models as *gam*, *gamboost*, or *gamLoess*
+  + Neural Networks as (averaged) *avNNet*, (Monotonic) Multilayer Perceptron *mlp*, and *monmlp*
+  + (weighted) k-Nearest Neighbors *knn*, and *kknn*
+  + Random Forest *rf* or a fast implementation of Random Forests *ranger*
+  + Generalized Boosted Regression Modeling *gbm*\
+  
+Illustratively, the algorithms *rf* and *knn* are tuned.\
+
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+models <-  c("glm", "svmLinear", "gamboost", "gamLoess", "kknn", "gam", "ranger", "avNNet",
+             "mlp", "monmlp", "gbm", "svmRadial", "svmRadialCost", "svmRadialSigma")       
+
+set.seed(100, sample.kind = "Rounding")
+control <-  trainControl(method="boot", number=25,  savePredictions="final",  allowParallel = TRUE)
+fits_list <- caretList(train_x_imp_sub, train_y_sub,  trControl=control,  methodList= models, 
+                       tuneList=list(
+                         knn=caretModelSpec(method="knn", tuneGrid=data.frame(k=k)),
+                         rf=caretModelSpec(method="rf", tuneGrid=data.frame(mtry=mtry), nodesize=1)))
+```
+
+
+After training the different ML algorithms with *caretList* one can observe that the ML *gamboost* has the best RMSE on train data followed by *ranger* and *gamLoess*.  *avNNet* and *mlp* perform the worst on train  data.\
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width= "70%", out.height="45%",  fig.align = "center"}                       
+results <-resamples(fits_list)
+scales <- list(x=list(relation="free"), y=list(relation="free"))
+bwplot(results, scales=scales, metric = "RMSE")
+```
+
+The correlation between models indicate that the models are highly correlated with each other except *mlp* and partially *kknn*. For a good performing ensemble the base models should be ideally uncorrelated.\
+
+```{r message=FALSE, warning=FALSE}                       
+# Model correlation matrix
+modelCor(results)
+```
+
+The ensemble model is built on all 16 base models (see above) despite the high correlations.\
+
+
+```{r, message=FALSE, warning=FALSE, out.width= "70%", out.height="45%",  tidy.opts=list(width.cutoff=50), tidy=TRUE}
+set.seed(100, sample.kind = "Rounding")
+ensemble <- caretEnsemble(fits_list, metric = "RMSE", trControl = control)
+summary(ensemble)
+plot(ensemble)
+```
+
+
+The RMSE value (red line) of the ensemble model on train data is `r round(ensemble$error$RMSE, 0)` which is better than the RMSE value of the individual models.\
+
+
+```{r, message=FALSE, warning=FALSE}
+y_hat_ensemble <- predict(ensemble, newdata = test_x_imp)
+RMSE_ensemble<- RMSE(y_hat_ensemble, test_y)
+RMSE_ensemble
+```
+
+
+The RMSE value of the ensemble model is evaluated on test set and is equal to `r round(RMSE_ensemble, 0)`.\
+Surprisingly, the RMSE value of the ensemble model on **test set** is worse than the RMSE value of *Random Forest rf* on test set (see section above):
+$$ \frac{RMSE(rf)}{RMSE(ensemble)} = `r round(RMSE_rf/RMSE_ensemble,2)` $$
+
+Probably the worse performance of the ensemble model on test set could be due to over-fitting on train set. Moreover, as stated above, the 16 base models are highly correlated with each other, which could have a negative impact on model performance.\
+
+**Final model**:\
+
+The  *Random Forest rf* is chosen as the final model. Before its performance is evaluated on **validation set**, it is trained on whole train set:
+
+```{r message=FALSE, warning=FALSE,  out.width = "70%" , out.height="30%", fig.align = "center"}
+set.seed(100, sample.kind = "Rounding")
+mtry<-seq(50, 550,50)
+fit_rf_final<-train(train_x_imp, train_y, method = "rf", tuneGrid=data.frame(mtry=mtry), nodesize=1)
+ggplot(fit_rf_final)
+fit_rf_final$finalModel
+y_hat_rf_final <- predict(fit_rf_final, validation_x_imp)
+RMSE_rf_final<-RMSE(validation_y, y_hat_rf_final)
+RMSE_rf_final
+```
+
+The final model *Random Forest* has now a RMSE of `r round(RMSE_rf_final, 0)`. This value is slightly higher than the mean of *units_sold* (`r round(mean(train_set$units_sold), 0)`) regarding train data. In addition, the median of *units_sold* regarding train data is equal to 1,000 units, thus 50% of units_sold is under this value. Consequently, the model prediction is, strictly spoken, not precise enough.
+
+\newpage
+# 4) Conclusion
+
+The final RMSE value on validation set by *rf* is `r round(RMSE_rf_final, 0)`  which improves the RMSE value of the baseline model about `r (1- round(RMSE_rf_final/RMSE_baseline,2))*100`\% with an acceptable computation time.\
+
+The models developed in this paper must be adjusted for new merchants not having sold any products on the e-commerce platform Wish yet. This applies to new products having no product ratings on the platform, either.\
+
+Overall, this data set has (very) less correlated features with the model output. This could probably result in poor ML performance in terms of RMSE value. Further improvement of prediction could be achieved through collection of further sound data correlating with *units_sold* and comprehensive utilization of *predictor engineering* which creates features with "more signal and less noise".
